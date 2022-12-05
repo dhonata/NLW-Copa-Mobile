@@ -2,6 +2,9 @@ import { createContext, ReactNode, useEffect, useState } from "react";
 import * as Google from 'expo-auth-session/providers/google'
 import * as AuthSection from 'expo-auth-session'
 import * as WebBrowser from 'expo-web-browser'
+import { api } from "../services/api";
+
+import AsyncStorage from "@react-native-async-storage/async-storage"
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -47,10 +50,42 @@ export function AuthContextProvider({ children }: AuthProviderProps){
   }
 
   async function signInWithGoogle(access_token: string){
-    console.log('token de authenticação ===> ', access_token);
+    try {
+      setIsUserLoading(true)
+      
+      const responseToken = await api.post('/users', { access_token });
+      api.defaults.headers.common['Authorization'] = `Bearer ${responseToken.data.token}`
+
+      const userInfoResponse = await api.get('/me')
+
+      await AsyncStorage.setItem('@copa/log', JSON.stringify(userInfoResponse.data.user))
+
+      setUser(userInfoResponse.data.user)
+
+    } catch (error) {
+      console.log(error)
+      throw error
+    } finally {
+      setIsUserLoading(false)
+    }
+  }
+
+  async function verifyLogin(){
+
+    setIsUserLoading(true)
+
+    const userLogged = JSON.parse(await AsyncStorage.getItem('@copa/log'))
+    
+    setUser(userLogged ?? user)
+    
+    setIsUserLoading(false)
+    
   }
 
   useEffect(() => {
+
+    verifyLogin()
+
     if(response?.type === 'success' && response?.authentication?.accessToken){
       signInWithGoogle(response.authentication.accessToken)
     }
